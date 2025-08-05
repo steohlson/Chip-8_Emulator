@@ -1,6 +1,5 @@
 
 #include "chip8.h"
-#include <SDL3/SDL.h>
 #include <string.h>
 
 //current opcode
@@ -66,6 +65,7 @@ uint8_t chip8_fontset[80] =
 #define Vy (V[(opcode & 0x00F0) >> 4])
 
 void chip8_init() {
+    
     pc = MM_PROGRAM;
     opcode = 0;
     I = 0;
@@ -82,7 +82,7 @@ void chip8_init() {
         memory[MM_FONT + i] = chip8_fontset[i];
     }
 
-    display_init();
+    //display_init();
 
 }
 
@@ -398,7 +398,7 @@ void chip8_update() {
 
 
     if(draw_flag) {
-        display_draw();
+        //display_draw();
     }
     
     if(delay_timer > 0) {delay_timer--;}
@@ -407,7 +407,7 @@ void chip8_update() {
 }
 
 
-
+/*
 
 ////////////////// DISPLAY CODE //////////////////
 
@@ -443,4 +443,4 @@ void display_draw() {
     SDL_RenderTexture(renderer, texture, NULL, NULL);
     SDL_RenderPresent(renderer);
     SDL_Delay(100);
-}
+}*/
