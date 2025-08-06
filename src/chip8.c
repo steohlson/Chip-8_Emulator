@@ -2,8 +2,13 @@
 #include "chip8.h"
 #include <string.h>
 
-#define CLK_HZ 5
+#define CLK_HZ 500
 #define CLK_PER (1000 / CLK_HZ)
+
+//Screen dimensions
+#define WIDTH 64
+#define HEIGHT 32
+#define SCALE 10
 
 //current opcode
 uint16_t opcode;
@@ -94,7 +99,7 @@ void chip8_init() {
 
 
 void chip8_load_rom(const char *filename) {
-    FILE *fp = fopen("G:/MiscProjects/Chip-8/roms/Pong (1 player).ch8", "rb");
+    FILE *fp = fopen(filename, "rb");
     
     if (fp == NULL) {
         SDL_Log("Failed to open ROM");
@@ -113,6 +118,71 @@ void chip8_load_rom(const char *filename) {
 
 void chip8_update() {
     uint64_t start_time = SDL_GetTicks();
+
+    SDL_Event event;
+    if(SDL_PollEvent(&event)) {
+        uint8_t keypad_index;
+        switch (event.key.key)
+            {
+            case SDLK_1:
+                keypad_index = 0x1;
+                break;
+            case SDLK_2:
+                keypad_index = 0x2;
+                break;
+            case SDLK_3:
+                keypad_index = 0x3;
+                break;
+            case SDLK_4:
+                keypad_index = 0xc;
+                break;
+            case SDLK_Q:
+                keypad_index = 0x4;
+                break;
+            case SDLK_W:
+                keypad_index = 0x5;
+                break;
+            case SDLK_E:
+                keypad_index = 0x6;
+                break;
+            case SDLK_R:
+                keypad_index = 0xd;
+                break;
+            case SDLK_A:
+                keypad_index = 0x7;
+                break;
+            case SDLK_S:
+                keypad_index = 0x8;
+                break;
+            case SDLK_D:
+                keypad_index = 0x9;
+                break;
+            case SDLK_F:
+                keypad_index = 0xe;
+                break;
+            case SDLK_Z:
+                keypad_index = 0xa;
+                break;
+            case SDLK_X:
+                keypad_index = 0x0;
+                break;
+            case SDLK_C:
+                keypad_index = 0xb;
+                break;
+            case SDLK_V:
+                keypad_index = 0xf;
+                break;
+        
+            }
+        if(event.type == SDL_EVENT_KEY_DOWN) {
+           keypad[keypad_index] = 1;
+        } else if (event.type == SDL_EVENT_KEY_UP) {
+            keypad[keypad_index] = 0;
+        }
+
+
+    }
+
     opcode = memory[pc] << 8 | memory[pc + 1];
     
     SDL_Log("0x%04X", opcode);
@@ -169,62 +239,73 @@ void chip8_update() {
 
                 case 0x0001: //8xy1 OR Vx, Vy
                     Vx |= Vy;
+                    V[0xF] = 0;
                     pc += 2;
                 break;
 
                 case 0x0002: //8xy2 AND Vx, Vy
                     Vx &= Vy;
+                    V[0xF] = 0;
                     pc += 2;
                 break;
 
                 case 0x0003: //8xy3 XOR Vx, Vy
                     Vx ^= Vy;
+                    V[0xF] = 0;
                     pc += 2;
                 break;
 
                 case 0x0004: //8xy4 ADD Vx, Vy
                     uint16_t result = (uint16_t)Vx + (uint16_t)Vy;
+                    Vx = (uint8_t)result;
                     if (result > 255) {
                         V[0xF] = 1;
                     } else {
                         V[0xF] = 0;
                     }
-                    Vx = (uint8_t)result;
+                    
                     
                     pc += 2;
                 break;
-
+                uint8_t temp_vf = 0;
                 case 0x0005: //8xy5 SUB Vx, Vy
-                    if (Vx > Vy) {
-                        V[0xF] = 1;
+                    
+                    if (Vx >= Vy) {
+                        temp_vf = 1;
                     } else {
-                        V[0xF] = 0;
+                        temp_vf = 0;
                     }
-
+                    
                     Vx -= Vy;
+                    V[0xF] = temp_vf;
                     pc += 2;
                 break;
 
                 case 0x0006: //8xy6 SHR Vx {, Vy} - divide by 2
-                    V[0xF] = Vx & 0x01;
+                    temp_vf = Vx & 0x01;
                     Vx >>= 1;
+                    V[0xF] = temp_vf;
+                    
                     pc += 2;
                 break;
 
                 case 0x0007: //8xy7 SUBN Vx, Vy - Vx = Vy-Vx
-                    if (Vx < Vy) {
-                        V[0xF] = 1;
+                    if (Vx <= Vy) {
+                        temp_vf = 1;
                     } else {
-                        V[0xF] = 0;
+                        temp_vf = 0;
                     }
-
                     Vx = Vy - Vx;
+                    V[0xF] = temp_vf;
+                    
                     pc += 2;
                 break;
 
                 case 0x000E: //8xyE SHL Vx {, Vy} - mult by two
-                    V[0xF] = (Vx & 0x80) >> 7;
+                    temp_vf = (Vx & 0x80) >> 7;
                     Vx <<= 1;
+                    V[0xF] = temp_vf;
+                    
                     pc += 2;
                 break;
 
@@ -264,20 +345,28 @@ void chip8_update() {
             //Draw sprite to screen
             uint8_t height = opcode & 0x000F;
             uint8_t line;
-
-            V[0xF] = 0;
+            uint8_t collision = 0;
+            
             for(int y=0; y < height; y++) {
                 line = memory[I + y];
+                uint16_t py = Vy + y;
+                if(py >= HEIGHT) break;
                 for(int x=0; x < 8; x++) {
+                    uint16_t px = Vx + x;
+                    if(px >= WIDTH) continue;
                     if((line & (0x80 >> x)) != 0) {
-                        if(display[(Vx + x + ((Vy + y) * 64))] == 1) {
-                            V[0xF] = 1;
+                        
+                        
+                        if(display[(px + (py * WIDTH))] == 1) {
+                            collision = 1;
                         }
 
-                        display[(Vx + x + ((Vy + y) * 64))] ^= 1;
+                        display[(px + (py * WIDTH))] ^= 1;
                     }
                 }
             }
+
+            V[0xF] = collision;
 
             draw_flag = 1;
             pc += 2;
@@ -356,15 +445,17 @@ void chip8_update() {
                 break;
                 
                 case 0x0055: // Fx55 LD [I], Vx - Store registers V0 through Vx in memory starting at location I
-                    for(int j=0; j <= Vx; j++) {
-                        memory[I + j] = V[j];
+                    for(int j=0; j <= (opcode & 0x0F00) >> 8; j++, I++) {
+                        memory[I] = V[j];
                     }
+                    pc += 2;
                 break;
 
                 case 0x0065: // Fx65 LD Vx, [I] - Read registers V0 through Vx from memory starting at location I.
-                    for(int j=0; j <= Vx; j++) {
-                        V[j] = memory[I + j];
+                    for(int j=0; j <= (opcode & 0x0F00) >> 8; j++, I++) {
+                        V[j] = memory[I];
                     }
+                    pc += 2;
                 break;
 
 
@@ -425,9 +516,7 @@ void chip8_update() {
 
 ////////////////// DISPLAY CODE //////////////////
 
-#define WIDTH 64
-#define HEIGHT 32
-#define SCALE 10
+
 
 SDL_Window* window;
 SDL_Renderer* renderer;
@@ -455,6 +544,9 @@ void display_init() {
         SDL_Log("SDL_CreateTexture Error: %s", SDL_GetError());
         exit(1);
     }
+
+    SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
+
 
 }
 
