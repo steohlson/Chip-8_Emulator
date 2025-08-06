@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include "SDL3/SDL.h"
 
 
 void chip8_init();

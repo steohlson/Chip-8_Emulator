@@ -2,16 +2,26 @@
     "version": 8,
     "configurePresets": [
         {
-            "name": "mingw",
-            "displayName": "GCC 13.1.0 x86_64-w64-mingw32",
-            "description": "Using compilers: C = C:\\Strawberry\\c\\bin\\gcc.exe, CXX = C:\\Strawberry\\c\\bin\\g++.exe",
+            "name": "profile1",
+            "displayName": "Visual Studio Community 2022 Release - amd64",
+            "description": "Using compilers for Visual Studio 17 2022 (x64 architecture)",
+            "generator": "Visual Studio 17 2022",
+            "toolset": "host=x64",
+            "architecture": "x64",
             "binaryDir": "${sourceDir}/out/build/${presetName}",
             "cacheVariables": {
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
-                "CMAKE_C_COMPILER": "C:/Strawberry/c/bin/gcc.exe",
-                "CMAKE_CXX_COMPILER": "C:/Strawberry/c/bin/g++.exe",
-                "CMAKE_BUILD_TYPE": "Debug"
+                "CMAKE_C_COMPILER": "cl.exe",
+                "CMAKE_CXX_COMPILER": "cl.exe"
             }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "profile1-debug",
+            "displayName": "Visual Studio Community 2022 Release - amd64 - Debug",
+            "configurePreset": "profile1",
+            "configuration": "Debug"
         }
     ]
 }

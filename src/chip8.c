@@ -2,6 +2,9 @@
 #include "chip8.h"
 #include <string.h>
 
+#define CLK_HZ 5
+#define CLK_PER (1000 / CLK_HZ)
+
 //current opcode
 uint16_t opcode;
 
@@ -31,7 +34,7 @@ uint8_t delay_timer;
 uint8_t sound_timer;
 
 //Stack
-uint8_t stack[16];
+uint16_t stack[16];
 //Stack pointer
 uint8_t sp;
 
@@ -82,18 +85,19 @@ void chip8_init() {
         memory[MM_FONT + i] = chip8_fontset[i];
     }
 
-    //display_init();
+    display_init();
+
+    srand((unsigned int)SDL_GetTicks());
+    
 
 }
 
+
 void chip8_load_rom(const char *filename) {
-    //char path[80] = "";
-    //strcpy(path, "./roms/");
-    //strcat(path, *filename);
-    FILE *fp = fopen("../roms/Pong (1 player).ch8", "rb");
+    FILE *fp = fopen("G:/MiscProjects/Chip-8/roms/Pong (1 player).ch8", "rb");
     
     if (fp == NULL) {
-        perror("Failed to open ROM");
+        SDL_Log("Failed to open ROM");
         return;
     }
 
@@ -108,8 +112,10 @@ void chip8_load_rom(const char *filename) {
 }
 
 void chip8_update() {
+    uint64_t start_time = SDL_GetTicks();
     opcode = memory[pc] << 8 | memory[pc + 1];
     
+    SDL_Log("0x%04X", opcode);
 
     switch(opcode & 0xF000) {
 
@@ -119,8 +125,7 @@ void chip8_update() {
         break;
 
         case 0x2000: // 2NNN CALL addr - call subroutine at nnn
-            sp++;
-            stack[sp] = pc;
+            stack[sp++] = pc;
             pc = opcode & 0x0FFF;
         break;
 
@@ -146,12 +151,12 @@ void chip8_update() {
         break;
 
         case 0x6000: //6xkk LD Vx, byte - Set Vx = kk
-            V[((opcode & 0x0F00) >> 16)] = opcode & 0x00FF;
+            Vx = opcode & 0x00FF;
             pc += 2;
         break;
         
         case 0x7000: //7xkk ADD Vx, byte
-            V[((opcode & 0x0F00) >> 16)] += opcode & 0x00FF;
+            Vx += opcode & 0x00FF;
             pc += 2;
         break;
         
@@ -184,7 +189,7 @@ void chip8_update() {
                     } else {
                         V[0xF] = 0;
                     }
-                    Vx = result;
+                    Vx = (uint8_t)result;
                     
                     pc += 2;
                 break;
@@ -213,7 +218,7 @@ void chip8_update() {
                         V[0xF] = 0;
                     }
 
-                    V[(opcode & 0x0F00) >> 8] -= V[(opcode & 0x00F0) >> 16];
+                    Vx = Vy - Vx;
                     pc += 2;
                 break;
 
@@ -224,7 +229,7 @@ void chip8_update() {
                 break;
 
                 default:
-                    perror("Unkown opcode: " + opcode);
+                    SDL_Log("Unknown opcode: 0x%04X", opcode);
             }
 
 
@@ -279,8 +284,8 @@ void chip8_update() {
         break;
 
         case 0xE000:
-            switch (opcode & 0x000F) {
-                case 0x000E: // Ex9E SKP Vx - skip next instruction if key with the value of Vx is pressed
+            switch (opcode & 0x00FF) {
+                case 0x009E: // Ex9E SKP Vx - skip next instruction if key with the value of Vx is pressed
                     //check keyboard
                     if(keypad[Vx] != 0) { //is pressed
                         pc += 2;
@@ -288,7 +293,7 @@ void chip8_update() {
                     pc += 2;
                 break;
 
-                case 0x0001: // ExA1 SKNP Vx - Skip next instruction if key with value of Vx is not pressed
+                case 0x00A1: // ExA1 SKNP Vx - Skip next instruction if key with value of Vx is not pressed
                     //check keyboard
                     if(keypad[Vx] == 0) { //is not pressed
                         pc += 2;
@@ -297,12 +302,12 @@ void chip8_update() {
                 break;
                 
                 default:
-                    perror("Unkown opcode: " + opcode);
+                    SDL_Log("Unknown opcode: 0x%04X", opcode);
             }
         break;
 
         case 0xF000:
-            switch (opcode & 0x000F) {
+            switch (opcode & 0x00FF) {
                 case 0x0007: // Fx07 LD Vx, DT - Set Vx = delay timer value
                     Vx = delay_timer;
                     pc += 2;
@@ -321,22 +326,22 @@ void chip8_update() {
                 break;
 
 
-                case 0x0008: // Fx18 LD ST, Vx - set sound timer = Vx
+                case 0x0018: // Fx18 LD ST, Vx - set sound timer = Vx
                     sound_timer = Vx;
                     pc += 2;
                 break;
 
-                case 0x000E: // Fx1E Add I, Vx - set I = I + Vx
+                case 0x001E: // Fx1E Add I, Vx - set I = I + Vx
                     I += Vx;
                     pc += 2;
                 break;
 
-                case 0x0009: // Fx29 LD F, Vx - set I = location of sprite for digit Vx
+                case 0x0029: // Fx29 LD F, Vx - set I = location of sprite for digit Vx
                     I = MM_FONT + 5 * Vx;
                     pc += 2;
                 break;
 
-                case 0x0003: // Fx33 LD B, Vx - store BCD representation of Vx in memory locations I, I+1, and I+2
+                case 0x0033: // Fx33 LD B, Vx - store BCD representation of Vx in memory locations I, I+1, and I+2
                     memory[I] =  Vx / 100;
                     memory[I+1] = (Vx % 100) / 10;
                     memory[I+2] = Vx % 10;
@@ -344,70 +349,79 @@ void chip8_update() {
                     pc += 2;
                 break;
 
-                case 0x0005:
-                    switch (opcode & 0x00F0) {
-                        case 0x0010: // Fx15 LD DT, Vx - set delay timer = Vx
-                            delay_timer = Vx;
-                            pc += 2;
-                        break;
-                        
-                        case 0x0050: // Fx55 LD [I], Vx - Store registers V0 through Vx in memory starting at location I
-                            for(int j=0; j <= Vx; j++) {
-                                memory[I + j] = V[j];
-                            }
-                        break;
 
-                        case 0x0060: // Fx65 LD Vx, [I] - Read registers V0 through Vx from memory starting at location I.
-                            for(int j=0; j <= Vx; j++) {
-                                V[j] = memory[I + j];
-                            }
-                        break;
-
-                        default:
-                            perror("Unkown opcode: " + opcode);
-
+                case 0x0015: // Fx15 LD DT, Vx - set delay timer = Vx
+                    delay_timer = Vx;
+                    pc += 2;
+                break;
+                
+                case 0x0055: // Fx55 LD [I], Vx - Store registers V0 through Vx in memory starting at location I
+                    for(int j=0; j <= Vx; j++) {
+                        memory[I + j] = V[j];
                     }
-
                 break;
 
+                case 0x0065: // Fx65 LD Vx, [I] - Read registers V0 through Vx from memory starting at location I.
+                    for(int j=0; j <= Vx; j++) {
+                        V[j] = memory[I + j];
+                    }
+                break;
+
+
                 default:
-                    perror("Unkown opcode: " + opcode);
+                    SDL_Log("Unknown opcode: 0x%04X", opcode);
             }
+        break;
+
 
         case 0x0000: //Other opcode
-            switch(opcode & 0x000F){
-                case 0x0000: // Clear screen
+            switch(opcode & 0x00FF){
+                case 0x00E0: // Clear screen
                     //clear screen
                     for(int i=0; i < sizeof(display) / sizeof(display[0]); i++)   { display[i] = 0; }
                     pc += 2;
                 break;
 
-                case 0x000E: // RET, Returns from subroutine
-                    pc = stack[sp];
-                    sp--;
+                case 0x00EE: // RET, Returns from subroutine
+                    pc = stack[--sp] + 2; //+2 since otherwise it would run the call instruction again
                 break;
 
-                default: 
-                    perror("Unkown opcode: " + opcode);
+                default: // 0x0nnn - ignored by modern interpreters
+                    pc += 2;
             }
 
 
         default:
-            perror("Unkown opcode: " + opcode);
+            SDL_Log("Unknown opcode: 0x%04X", opcode);
     }
 
 
     if(draw_flag) {
-        //display_draw();
+        display_draw();
     }
     
-    if(delay_timer > 0) {delay_timer--;}
-    if(sound_timer > 0) {sound_timer--;}
+    //timers run at 60 hz
+    static uint64_t prev_timer_tick = 0;
+    uint64_t cur_timer_tick = SDL_GetTicks();
+    if(cur_timer_tick - prev_timer_tick >= 1000 / 60){
+        if(delay_timer > 0) {delay_timer--;}
+        if(sound_timer > 0) {sound_timer--;}
+
+        prev_timer_tick = cur_timer_tick;
+    }
+    
+
+
+
+    uint64_t delta_time = SDL_GetTicks() - start_time;
+    if(delta_time < CLK_PER) {
+        SDL_Delay(CLK_PER - (uint32_t)delta_time);
+    }
 
 }
 
 
-/*
+
 
 ////////////////// DISPLAY CODE //////////////////
 
@@ -421,14 +435,26 @@ SDL_Texture* texture;
 
 
 void display_init() {
-    if(SDL_Init(SDL_INIT_VIDEO) != 0) {
-        perror("SDL_Init Error");
-        return;
-    }
+    SDL_Init(SDL_INIT_VIDEO);
+    SDL_Log("SDL_Init Error: %s", SDL_GetError());
 
+
+    
     window = SDL_CreateWindow("Chip-8", WIDTH * SCALE, HEIGHT * SCALE, 0);
+    if (!window) {
+        SDL_Log("SDL_CreateWindow Error: %s", SDL_GetError());
+        exit(1);
+    }
     renderer = SDL_CreateRenderer(window, NULL);
+    if (!renderer) {
+        SDL_Log("SDL_CreateRenderer Error: %s", SDL_GetError());
+        exit(1);
+    }
     texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, WIDTH, HEIGHT);
+    if (!texture) {
+        SDL_Log("SDL_CreateTexture Error: %s", SDL_GetError());
+        exit(1);
+    }
 
 }
 
@@ -442,5 +468,4 @@ void display_draw() {
     SDL_RenderClear(renderer);
     SDL_RenderTexture(renderer, texture, NULL, NULL);
     SDL_RenderPresent(renderer);
-    SDL_Delay(100);
-}*/
+}
