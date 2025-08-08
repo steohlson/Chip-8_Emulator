@@ -2,3 +2,7 @@
 	path = Vendor/SDL3
 	url = https://github.com/libsdl-org/SDL.git
 	branch = main
+[submodule "roms/chip8-roms"]
+	path = roms/chip8-roms
+	url = https://github.com/steohlson/Chip-8_Emulator.git
+	branch = main

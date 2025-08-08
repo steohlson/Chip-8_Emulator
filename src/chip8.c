@@ -72,6 +72,12 @@ uint8_t chip8_fontset[80] =
 #define Vx (V[(opcode & 0x0F00) >> 8])
 #define Vy (V[(opcode & 0x00F0) >> 4])
 
+
+
+static SDL_AudioStream *stream = NULL;
+
+
+
 void chip8_init() {
     
     pc = MM_PROGRAM;
@@ -93,6 +99,15 @@ void chip8_init() {
     display_init();
 
     srand((unsigned int)SDL_GetTicks());
+
+    SDL_AudioSpec spec;
+    spec.channels = 1;
+    spec.format = SDL_AUDIO_F32;
+    spec.freq = 8000;
+
+    stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL );
+
+
     
 
 }
@@ -282,10 +297,9 @@ void chip8_update() {
                 break;
 
                 case 0x0006: //8xy6 SHR Vx {, Vy} - divide by 2
-                    temp_vf = Vx & 0x01;
-                    Vx >>= 1;
-                    V[0xF] = temp_vf;
-                    
+                    Vx = Vy >> 1;
+                    V[0xF] = Vy & 0x01;
+                                        
                     pc += 2;
                 break;
 
@@ -302,9 +316,8 @@ void chip8_update() {
                 break;
 
                 case 0x000E: //8xyE SHL Vx {, Vy} - mult by two
-                    temp_vf = (Vx & 0x80) >> 7;
-                    Vx <<= 1;
-                    V[0xF] = temp_vf;
+                    Vx = Vy << 1;
+                    V[0xF] = (Vx & 0x80) >> 7;
                     
                     pc += 2;
                 break;
@@ -349,11 +362,11 @@ void chip8_update() {
             
             for(int y=0; y < height; y++) {
                 line = memory[I + y];
-                uint16_t py = Vy + y;
-                if(py >= HEIGHT) break;
+                uint16_t py = (Vy + y) % HEIGHT;
+                //if(py >= HEIGHT) break; //For clipping
                 for(int x=0; x < 8; x++) {
-                    uint16_t px = Vx + x;
-                    if(px >= WIDTH) continue;
+                    uint16_t px = (Vx + x) % WIDTH;
+                    //if(px >= WIDTH) continue; //For clipping
                     if((line & (0x80 >> x)) != 0) {
                         
                         
@@ -499,6 +512,12 @@ void chip8_update() {
         if(sound_timer > 0) {sound_timer--;}
 
         prev_timer_tick = cur_timer_tick;
+    }
+
+    if(sound_timer > 0) {
+        SDL_ResumeAudioStreamDevice(stream);
+    } else {
+        SDL_PauseAudioStreamDevice(stream);
     }
     
 
