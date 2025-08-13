@@ -107,7 +107,7 @@ void chip8_init() {
 
     stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL );
 
-
+    SDL_ResumeAudioStreamDevice(stream);
     
 
 }
@@ -513,11 +513,19 @@ void chip8_update() {
 
         prev_timer_tick = cur_timer_tick;
     }
-
+    static current_sine_sample = 0;
     if(sound_timer > 0) {
-        SDL_ResumeAudioStreamDevice(stream);
-    } else {
-        SDL_PauseAudioStreamDevice(stream);
+        static float buf[128];
+        for(int i = 0; i < SDL_arraysize(buf); i++) {
+            const int freq = 440;
+            const float phase = current_sine_sample * freq / 8000.0f;
+            buf[i] = SDL_sinf(phase * 2 * SDL_PI_F);
+            current_sine_sample++;
+        }
+
+        current_sine_sample %= 8000;
+
+        SDL_PutAudioStreamData(stream, buf, sizeof(buf));
     }
     
 
@@ -543,7 +551,7 @@ SDL_Texture* texture;
 
 
 void display_init() {
-    SDL_Init(SDL_INIT_VIDEO);
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
     SDL_Log("SDL_Init Error: %s", SDL_GetError());
 
 
